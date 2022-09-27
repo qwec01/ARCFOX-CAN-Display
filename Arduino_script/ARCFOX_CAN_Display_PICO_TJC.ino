@@ -3,7 +3,7 @@
 #include <ACAN2515.h>
 #include <SdFat.h>
 #include <sdios.h>
-#define debug 1   //不需要debug时设0
+#define debug 0   //不需要debug时设0
 #define recmod 0  //1为主动解析，0为被动解析（默认）
 //-----------------------------------------------------//
 //                     根据车型修改数据                  //
@@ -60,7 +60,7 @@ uint8_t NonTractionPowerCount, flag;
 uint8_t i, CheckInterval;
 uint32_t runtime, ODO, brightruntime, ODObeginForMaxRangeCalc;
 int32_t NonTractionPower;
-static uint32_t XTAL = 8UL * 1000UL * 1000UL; //晶振8M
+static const uint32_t XTAL = 8000000; //晶振8M
 long Current, Current_mA;
 //以下快充CAN专用变量
 uint8_t FastCharge, CurPage, ChargerReady, BMSReady, ChargerHandShake = 0, BMSHandShake = 0, PGN = 0;
@@ -70,6 +70,7 @@ uint16_t BMSVoltage, BMSCurrent, BMSMaxVoltage, BMSMaxCurrent, RequireVoltage, R
 uint32_t FastChargeTimer = 0;
 static const uint32_t FastChargeTimeout = 10000; //ms
 uint8_t msg511[4], msg511_2[8], msg507[8], msg644[4], msg505[8], msg1B0[8], msg29A[8], msg321[8], msg32C[8];
+int16_t torque;
 
 
 static const byte MCP2515_SCK  = 2 ; // SCK input of MCP2515
@@ -95,12 +96,12 @@ void setup() {
   digitalWrite(LED_BUILTIN, LOW);
   Serial1.begin(115200);
   while (!Serial1);
-  //  pinMode (Vehicle_CS, OUTPUT) ;
-  //  pinMode (FC_CS, OUTPUT) ;
-  //  pinMode (BMS_CS, OUTPUT) ;
-  //  digitalWrite (Vehicle_CS, HIGH) ;
-  //  digitalWrite (FC_CS, HIGH) ;
-  //  digitalWrite (BMS_CS, HIGH) ;
+  pinMode (Vehicle_CS, OUTPUT) ;
+  pinMode (FC_CS, OUTPUT) ;
+  pinMode (BMS_CS, OUTPUT) ;
+  digitalWrite (Vehicle_CS, HIGH) ;
+  digitalWrite (FC_CS, HIGH) ;
+  digitalWrite (BMS_CS, HIGH) ;
   MCP2515RST();
   delay(50);
   Serial1.print("page page0"); End();
@@ -121,7 +122,7 @@ void setup() {
     settings.mRequestedMode = ACAN2515Settings::NormalMode;
     settings.mReceiveBufferSize = 16;
     settings.mTransmitBuffer0Size = 0;
-    ACAN2515Settings settings (XTAL, 250UL * 1000UL); //8Mhz 250kbps
+    ACAN2515Settings settings (XTAL, 250000); //8Mhz 250kbps
     ACAN2515Mask rxm0 = extended2515Mask (0x1FF80000);  //前2
     ACAN2515Mask rxm1 = extended2515Mask (0x1FF80000);  //后4
     const ACAN2515AcceptanceFilter filters [] = {
@@ -140,42 +141,17 @@ void setup() {
     }
     else
     {
+      Serial.print("FC CAN Fail 0x"); Serial.println(errorCode, HEX);
       Serial1.print("xstr 0,0,200,16,9,WHITE,BLACK,0,1,1,\"FC CAN Fail 0x"); Serial1.print(errorCode, HEX); Serial1.print('\"'); End();
     }
   }
-  //------------------------------------------------↓初始化BMS CAN线
-  {
-    settings.mRequestedMode = ACAN2515Settings::NormalMode;
-    settings.mReceiveBufferSize = 64;
-    settings.mTransmitBuffer0Size = 0;
-    ACAN2515Settings settings (XTAL, 500UL * 1000UL); //8Mhz 500kbps
-    ACAN2515Mask rxm0 = extended2515Mask (0x1FFCFFFF);  //前2
-    ACAN2515Mask rxm1 = extended2515Mask (0x1FFFFFFF);  //后4
-    const ACAN2515AcceptanceFilter filters [] = {
-      {extended2515Filter (0x18E000F9), RCV0},//ID 18Ex00009 最高最低温度 20*4/s
-      {extended2515Filter (0x18E000F7), RCV1},//ID 18Ex00007 最高最低电压
-      {extended2515Filter (0x1300F3C2), RCV2},//电流 100/s
-      {extended2515Filter (0x18E000FE), RCV3},//2 3字节是某种温度
-      {extended2515Filter (0x1FFFFFFF), RCV4},//
-      {extended2515Filter (0x1FFFFFFF), RCV5} //
-    };
-    while (FC.dispatchReceivedMessage());
-    uint16_t errorCode = BMS.begin (settings, [] { BMS.isr (); }, rxm0, rxm1, filters, 6);
-    if (errorCode == 0)
-    {
-      Serial1.print("xstr 0,16,200,16,9,WHITE,BLACK,0,1,1,\"BMS CAN Succ\""); End();
-    }
-    else
-    {
-      Serial1.print("xstr 0,16,200,16,9,WHITE,BLACK,0,1,1,\"BMS CAN Fail 0x"); Serial1.print(errorCode, HEX); Serial1.print('\"'); End();
-    }
-  }
+  delay(50);
   //------------------------------------------------↓初始化车辆CAN线-----------------------
   {
     settings.mRequestedMode = ACAN2515Settings::NormalMode;
-    settings.mReceiveBufferSize = 64;
+    settings.mReceiveBufferSize = 32;
     settings.mTransmitBuffer0Size = 0;
-    ACAN2515Settings settings (XTAL, 500UL * 1000UL); //8Mhz 500kbps
+    ACAN2515Settings settings (8000000, 500000); //8Mhz 500kbps
     ACAN2515Mask rxm0 = standard2515Mask (0x760 , 0, 0);  //前2
     ACAN2515Mask rxm1 = standard2515Mask (0x700 , 0, 0);  //后4
     const ACAN2515AcceptanceFilter filters [] = {
@@ -186,17 +162,73 @@ void setup() {
       {standard2515Filter (0x7FF , 0, 0), RCV4},//345 375温度 345
       {standard2515Filter (0x7FF , 0, 0), RCV5} //
     };
-    while (BMS.dispatchReceivedMessage() && FC.dispatchReceivedMessage());
-    uint16_t errorCode = Vehicle.begin (settings, [] { Vehicle.isr (); }, rxm0, rxm1, filters, 6);
-    if (errorCode == 0)
-    {
-      Serial1.print("xstr 0,32,200,16,9,WHITE,BLACK,0,1,1,\"Vehicle CAN Succ\""); End();
-    }
-    else
-    {
-      Serial1.print("xstr 0,32,200,16,9,WHITE,BLACK,0,1,1,\"Vehicle CAN Fail 0x"); Serial1.print(errorCode, HEX); Serial1.print('\"'); End();
+    //    while (BMS.dispatchReceivedMessage() && FC.dispatchReceivedMessage());
+    uint16_t errorCode = 255;
+    i=1;
+    while (errorCode != 0) {
+        errorCode = Vehicle.begin (settings, [] { Vehicle.isr (); }, rxm0, rxm1, filters, 6);
+//      errorCode = Vehicle.begin (settings, [] { Vehicle.isr (); });
+      if (errorCode == 0)
+      {
+        Serial1.print("xstr 0,32,300,16,9,WHITE,BLACK,0,1,1,\"Vehicle CAN Succ\""); End();
+#if debug
+        Serial.println("DBG: Vehicle CAN Success.");
+#endif
+      }
+      else
+      {
+#if debug
+        Serial.print("DBG: Vehicle CAN Fail 0x"); Serial.println(errorCode, HEX);
+#endif
+        Serial1.print("xstr 0,32,300,16,9,WHITE,BLACK,0,1,1,\"Vehicle CAN Fail 0x"); Serial1.print(errorCode, HEX); Serial1.print(" retried ");Serial1.print(i);Serial1.print('\"'); End();
+        i++;
+      }
+      delay(100);
     }
   }
+  //------------------------------------------------↓初始化BMS CAN线
+  i=0;
+  {
+    settings.mRequestedMode = ACAN2515Settings::NormalMode;
+    settings.mReceiveBufferSize = 32;
+    settings.mTransmitBuffer0Size = 0;
+    //    ACAN2515Settings settings (XTAL, 500000); //8Mhz 500kbps
+    ACAN2515Mask rxm0 = extended2515Mask (0x1FFCFFFF);  //前2
+    ACAN2515Mask rxm1 = extended2515Mask (0x1FFFFFFF);  //后4
+    const ACAN2515AcceptanceFilter filters [] = {
+      {extended2515Filter (0x18E000F9), RCV0},//ID 18Ex00009 最高最低温度 20*4/s
+      {extended2515Filter (0x18E000F7), RCV1},//ID 18Ex00007 最高最低电压
+      {extended2515Filter (0x1300F3C2), RCV2},//电流 100/s
+      {extended2515Filter (0x18E000FE), RCV3},//2 3字节是某种温度
+      {extended2515Filter (0x1FFFFFFF), RCV4},//
+      {extended2515Filter (0x1FFFFFFF), RCV5} //
+    };
+    //    while (FC.dispatchReceivedMessage());
+    uint16_t errorCode = 255;
+    //    uint16_t errorCode = BMS.begin (settings, [] { BMS.isr (); }, rxm0, rxm1, filters, 6);
+    
+    while (errorCode != 0) {
+      errorCode = BMS.begin (settings, [] { BMS.isr (); }, rxm0, rxm1, filters, 6);
+      if (errorCode == 0)
+      {
+
+        Serial1.print("xstr 0,16,300,16,9,WHITE,BLACK,0,1,1,\"BMS CAN Succ\""); End();
+#if debug
+        Serial.println("DBG: BMS CAN Success.");
+#endif
+      }
+      else
+      {
+#if debug
+        Serial.print("DBG: BMS CAN Fail 0x"); Serial.println(errorCode, HEX);
+#endif
+        Serial1.print("xstr 0,16,300,16,9,WHITE,BLACK,0,1,1,\"BMS CAN Fail 0x"); Serial1.print(errorCode, HEX); Serial1.print(" retried ");Serial1.print(i);Serial1.print('\"'); End();
+        i++;
+      }
+      delay(100);
+    }
+  }
+
 
   //--set filters--------------------------------------------
   {
@@ -212,13 +244,15 @@ void setup() {
     };
     const uint16_t errorCode = BMS.setFiltersOnTheFly (rxm0, rxm1, filters, 6);
     if (errorCode != 0) {
+#if debug
       Serial.print("BMS Filter Fail 0x");
       Serial.println(errorCode, HEX);
-    }else{
+#endif
+    } else {
       Serial1.print("xstr 0,48,200,16,9,WHITE,BLACK,0,1,1,\"BMS Filter Set\""); End();
     }
   }
-  
+
   {
     ACAN2515Mask rxm0 = standard2515Mask (0x760 , 0, 0);  //前2
     ACAN2515Mask rxm1 = standard2515Mask (0x700 , 0, 0);  //后4
@@ -232,15 +266,17 @@ void setup() {
     };
     const uint16_t errorCode = Vehicle.setFiltersOnTheFly (rxm0, rxm1, filters, 6);
     if (errorCode != 0) {
+#if debug
       Serial.print("Vehicle Filter Fail 0x");
       Serial.println(errorCode, HEX);
-    }else{
+#endif
+    } else {
       Serial1.print("xstr 0,64,200,16,9,WHITE,BLACK,0,1,1,\"Vheicle Filter Set\""); End();
     }
   }
   //-------------------------------------------------------------------------------------
 
-  
+
   //------------------------------------------------↑初始化车辆 CAN线
   //  ClrInterrupts(Vehicle_CS);
   //  pinMode (Vehicle_INT, INPUT) ;
@@ -295,8 +331,9 @@ void setup() {
 #if debug
     Serial.println("SD Begin Done.");
     Serial1.print("xstr 0,80,300,16,9,WHITE,BLACK,0,1,1,\"SD Card Init Success\""); End();
-  }
 #endif
+  }
+
   if (!file.open("EEPROM.txt", O_READ)) {
     //    error("open failed");
 #if debug
@@ -355,7 +392,7 @@ void setup() {
 
   }
   if (SOC > 0) {
-    Serial1.print("xstr 0,80,300,16,9,WHITE,BLACK,0,1,1,\"Lost SOC when stop: ");
+    Serial1.print("xstr 0,96,200,16,9,WHITE,BLACK,0,1,1,\"Lost SOC when stop: ");
     Serial1.print((last_stop_SOC - start_SOC) / 10.0); Serial1.print("%\""); End();
   }
   //  used_SOC_at_start = used_SOC;

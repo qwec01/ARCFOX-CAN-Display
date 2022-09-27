@@ -6,7 +6,7 @@ void calc()
   ODO = (((uint32_t)odo[0] << 16) + ((uint32_t)odo[1] << 8) + (uint32_t)odo[2]) / 10.0;
   Voltage = BatModuleVolt[0] * 2 / 10;
   power = (Voltage / 10.0) * ( Current_mA / 1000.0) / 10.0; //100倍,kW
-  
+  torque=(msg505[2]*256+msg505[3]-10000)/500;
   if (NonTractionPowerCount == 5)
   {
     NonTractionPower = 0;

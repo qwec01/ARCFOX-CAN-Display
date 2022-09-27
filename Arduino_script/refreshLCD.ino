@@ -34,6 +34,10 @@ void refreshLCD()
   if (CurPage == 1) {
     uint16_t color;
     //-------------------------------功率%
+//    if (PowerPercent >= 99)
+//      PowerPercent = 99;
+//    UpdateInt(13, PowerPercent);
+
     if (PowerPercent >= 99)
       PowerPercent = 99;
     UpdateInt(13, PowerPercent);
@@ -115,14 +119,14 @@ void refreshLCD()
       UpdateInt(6, MinBatProbTemp[4]);
       //-----------------------------------其它温度 非牵引功率
       UpdateInt(8, interior_temp / 2);
-      UpdateInt(11, Temp[3]); //IGBT
+      UpdateInt(10, Temp[3]); //IGBT
       UpdateInt(9, Temp[4]); //变流器冷却液
-      UpdateInt(12, Temp[0]); //AC进风口
-      UpdateInt(10, uint16_t(Temp[1]) / 2 - 50); //？冷却液
-      UpdateInt(14, msg644[0] - 50); //644B1
-      UpdateInt(15, msg644[1] - 50); //644B2
-      UpdateInt(16, msg644[2] - 50); //644B5
-      UpdateInt(17, msg644[3] - 50); //644B6
+//      UpdateInt(12, uint16_t(Temp[0])); //AC进风口
+//      UpdateInt(10, uint16_t(Temp[1]) / 2 - 50); //？冷却液
+      UpdateInt(14, msg644[0] - 50); //水温
+      UpdateInt(15, msg644[1] - 50); //水温
+      UpdateInt(16, msg644[2] - 50); //电池水温
+      UpdateInt(17, msg644[3] - 50); //电池水温
       //      Serial.print(msg644[0]);
 
       //    Serial.print(NonTractionPower / 5);
