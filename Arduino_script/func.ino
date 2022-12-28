@@ -5,7 +5,7 @@ void FastChargeReset()
   MessageBytes = 0; ChargerVoltage = 0; ChargerCurrent = 0; ChargerMaxVoltage = 0; ChargerMaxCurrent = 0;
   BMSVoltage = 0; BMSCurrent = 0; BMSMaxVoltage = 0; BMSMaxCurrent = 0; RequireVoltage = 0; RequireCurrent = 0;
 }
-void ClrInterrupts(byte CS_PIN){
+void ClrInterrupts(byte CS_PIN) {
   digitalWrite(CS_PIN, LOW);
   SPI.transfer (BIT_MODIFY_COMMAND) ;
   SPI.transfer (CANINTF_REGISTER) ;
@@ -196,101 +196,31 @@ void StartRefresh() {
 //----------------------------------------------------------------------------------------//
 //                                    ↓CAN报文处理子程序↓                                  //
 //---------------------------------------------------------------------------------------//
-static void RCV0 (const CANMessage & inMessage) {   //ID=215 电压
-  if (inMessage.id == 0x50C)
-  {
-    PowerPercent = inMessage.data[0] - 125;
-
+static void RCV0 (const CANMessage & inMessage) {   //ID=150 电机
+  //  Serial.print(inMessage.id,HEX);
+  if (inMessage.id == 0x150) { //电机转速、扭矩 EVBUS
+    MotorRPM = (inMessage.data[2] << 8) + inMessage.data[3]; //需要减32768
+    torque = (inMessage.data[4] << 8) + inMessage.data[5]; //需要减32768再除10
+    //DynamicBrakeIndicator
+    //TractionAllowed
   }
-  if (inMessage.id == 0x580)
-  {
-    AhBurnt = (inMessage.data[2] << 8) + inMessage.data[3];
-    AhRegen = (inMessage.data[0] << 8) + inMessage.data[1];
+  if (inMessage.id == 0x120) { //制动系统数据 IBUS1
+    cylinder_pressure = ((inMessage.data[2] << 2)+((inMessage.data[3] & 0b11000000)>>6))-73; //闸缸压力
   }
-  if (inMessage.id == 0x582)  //车内温度
-  {
-    interior_temp = inMessage.data[0] - 96;
-  }
-  if (inMessage.id == 0x504) //剩余续航
-  {
-    Range = (inMessage.data[3] << 8) + (inMessage.data[4]); //100倍
-  }
-  if (inMessage.id == 0x503) //加速度
-  {
-    accel = (inMessage.data[4] << 8) + (inMessage.data[5]) - 370; //100倍
-  }
-
-  if (inMessage.id == 0x18E00009) //1 2组温度最值
-  {
-    MaxBatProbTemp[0] = inMessage.data[2] - 50;
-    MinBatProbTemp[0] = inMessage.data[4] - 50;
-  }
-  if (inMessage.id == 0x18E10009) //3 4组温度最值
-  {
-    MaxBatProbTemp[1] = inMessage.data[2] - 50;
-    MinBatProbTemp[1] = inMessage.data[4] - 50;
-  }
-  if (inMessage.id == 0x18E20009) //5 6组温度最值
-  {
-    MaxBatProbTemp[2] = inMessage.data[2] - 50;
-    MinBatProbTemp[2] = inMessage.data[4] - 50;
-  }
-  if (inMessage.id == 0x18E30009) //7 8组温度最值
-  {
-    MaxBatProbTemp[3] = inMessage.data[2] - 50;
-    MinBatProbTemp[3] = inMessage.data[4] - 50;
-  }
-  if (inMessage.id == 0x100956F4) //BMS准备就绪
-  {
-    FastChargeTimer = millis();
-    BMSReady = inMessage.data[0];
-  }
-  if (inMessage.id == 0x100AF456) //充电机准备就绪
-  {
-    FastChargeTimer = millis();
-    ChargerReady = inMessage.data[0];
-  }
-  if (inMessage.id == 0x511) //电池相关
-  {
-    msg511[0] = inMessage.data[0];
-    msg511[1] = inMessage.data[1];
-    msg511[2] = inMessage.data[4];
-    msg511[3] = inMessage.data[7];
-    for (i = 0; i <= 7; i++) {
-      msg511_2[i] = inMessage.data[i];
-    }
-  }
-  if (inMessage.id == 0x507) //电池相关
-  {
-    for (i = 0; i <= 7; i++) {
-      msg507[i] = inMessage.data[i];
-    }
-  }
-  if (inMessage.id == 0x505) //电池相关
-  {
-    for (i = 0; i <= 7; i++) {
-      msg505[i] = inMessage.data[i];
-    }
-  }
-
 }
 
 static void RCV1 (const CANMessage & inMessage)   //ID=215 电压
 {
+  //  Serial.print(inMessage.id,HEX);
   //8us
   //  Serial.println(inMessage.id);
-  if ((inMessage.id & 0xFFF0000F) == 0x18E00007) //各电池模组电压最值
-  {
-    byte i = (inMessage.id & 0x000F0000) >> 16;
-    MaxVolt[i] = (inMessage.data[2] << 8) + inMessage.data[3];
-    MinVolt[i] = (inMessage.data[5] << 8) + inMessage.data[6];
+  if (inMessage.id == 0x220) { //电压
+    voltage = (inMessage.data[6] << 8) + inMessage.data[7];
   }
-  if (inMessage.id == 0x641)  //ODO
-  {
-    uint8_t i;
-    for (i = 0; i <= 2; i++)
-      odo[i] = inMessage.data[i + 3];
+  if (inMessage.id == 0x248) { //电流
+    current = (inMessage.data[2] << 8) + inMessage.data[3];
   }
+
   if (inMessage.id == 0x1826F456) //充电机握手
   {
     FastChargeTimer = millis();
@@ -301,26 +231,25 @@ static void RCV1 (const CANMessage & inMessage)   //ID=215 电压
     FastChargeTimer = millis();
     BMSHandShake = 1;
   }
-  if (inMessage.id == 0x644)  //温度
-  {
-    //    Serial.println("644");
-    msg644[0] = inMessage.data[0];
-    msg644[1] = inMessage.data[1];
-    msg644[2] = inMessage.data[4];
-    msg644[3] = inMessage.data[5];
-  }
+
 }
 
 static void RCV2 (const CANMessage & inMessage)   //ID=504 剩余续航
 {
-  if (inMessage.id == 0x215)  //电池组总电压
-  {
-    BatModuleVolt[0] = (inMessage.data[4] << 8) + inMessage.data[5];
-  }
+  //  Serial.print(inMessage.id,HEX);
 
-  if (inMessage.id == 0x130003C2 && inMessage.data[1] == 0x0A) //arcfox电池电流，带滤波，6-7次/s
+  if (inMessage.id == 0x374) { //电加热
+    PTC_current = (inMessage.data[3] << 8) + inMessage.data[4];
+  }
+  if (inMessage.id == 0x375)
   {
-    Current = ((uint32_t)(inMessage.data[2]) << 16) + ((uint16_t)(inMessage.data[3]) << 8) + inMessage.data[4] - 0x800000;
+    Temp[3] = inMessage.data[5] - 50; //IGBT结温
+    Temp[4] = inMessage.data[6] - 50; //PDU温度？还是电机温度？
+  }
+  if (inMessage.id == 0x379)
+  {
+    HeatCoreTemp[0] = inMessage.data[2]; //暖水箱出口温度
+    HeatCoreTemp[1] = inMessage.data[3]; //暖水箱进口温度
   }
   if (inMessage.id == 0x1CEC56F4 || inMessage.id == 0x1CECF456)
   {
@@ -364,50 +293,57 @@ static void RCV2 (const CANMessage & inMessage)   //ID=504 剩余续航
 }
 static void RCV3 (const CANMessage & inMessage)   //ID=318 速度 小计里程
 {
-  if (inMessage.id == 0x318)  //速度
-  {
-    spd = (inMessage.data[5] << 8) + (inMessage.data[6]); //10倍
+  //  Serial.print(inMessage.id,HEX);
+  if (inMessage.id == 0x491) {  //压缩机
+    compressor_current = ((inMessage.data[6] << 8) + inMessage.data[7]);
   }
   if (inMessage.id == 0x1808F456) {
     FastChargeTimer = millis();
     ChargerMaxVoltage = (inMessage.data[1] << 8) + inMessage.data[0];
     ChargerMaxCurrent = abs((inMessage.data[5] << 8) + inMessage.data[4] - 4000); //10倍
   }
-  if (inMessage.id == 0x321) {
-    for (i = 0; i <= 7; i++) {
-      msg321[i] = inMessage.data[i];
-    }
-  }
-  if (inMessage.id == 0x32C) {
-    for (i = 0; i <= 7; i++) {
-      msg32C[i] = inMessage.data[i];
-    }
-  }
-    if (inMessage.id == 0x345)
-  {
-    Temp[0] = inMessage.data[4];//AC进风口温度
-    Temp[1] = inMessage.data[5];//冷却水
-    Temp[2] = inMessage.data[7];
-  }
-  if (inMessage.id == 0x375)
-  {
-    Temp[3] = inMessage.data[5] - 50; //IGBT
-    Temp[4] = inMessage.data[6] - 50; //coolent
-  }
+  //  if (inMessage.id == 0x345)
+  //  {
+  //    Temp[0] = inMessage.data[4];//AC进风口温度
+  //    Temp[1] = inMessage.data[5];//冷却水
+  //    Temp[2] = inMessage.data[7];
+  //  }
+
 }
 static void RCV4 (const CANMessage & inMessage)   //ID=345 375
 {
-  if (inMessage.id == 0x345)
-  {
-    Temp[0] = inMessage.data[4];//AC进风口温度
-    Temp[1] = inMessage.data[5];//冷却水
-    Temp[2] = inMessage.data[7];
+  //  Serial.print(inMessage.id,HEX);
+
+  if (inMessage.id == 0x504) { //剩余续航
+    Range = (inMessage.data[3] << 8) + inMessage.data[4]; //10倍
   }
-  if (inMessage.id == 0x375)
-  {
-    Temp[3] = inMessage.data[5] - 50; //IGBT
-    Temp[4] = inMessage.data[6] - 50; //coolent
+  if (inMessage.id == 0x50C) { //功率百分比
+    PowerPercent = inMessage.data[0] - 125 ; //1.25倍
   }
+  if (inMessage.id == 0x520) { //12V电压电流
+    current12V = (inMessage.data[2] << 8) + inMessage.data[3]; //100倍
+    voltage12V = inMessage.data[7];//10倍
+  }
+  if (inMessage.id == 0x531)  //ODO
+  {
+    uint8_t i;
+    for (i = 0; i <= 4; i++)
+      odo[i] = inMessage.data[i];
+  }
+  if (inMessage.id == 0x581) { //风扇、主动格栅
+    fanRPM = inMessage.data[2];
+    grillOpen = inMessage.data[5];
+  }
+  if (inMessage.id == 0x582) { //车内温、PM2.5
+    interior_temp = inMessage.data[0];
+  }
+  //  if (inMessage.id == 0x375)
+  //  {
+  //    Temp[3] = inMessage.data[5] - 50; //IGBT
+  //    Temp[4] = inMessage.data[6] - 50; //coolent
+  //  }
+
+
   if (inMessage.id == 0x1812F456) { //桩输出
     FastChargeTimer = millis();
     ChargerVoltage = (inMessage.data[1] << 8) + inMessage.data[0];
@@ -424,11 +360,30 @@ static void RCV4 (const CANMessage & inMessage)   //ID=345 375
 
 static void RCV5 (const CANMessage & inMessage)   //
 {
-  if (inMessage.id == 0x1B0 && inMessage.data[1] == 0) {
+  //  Serial.print(inMessage.id,HEX);
+  if (inMessage.id == 0x644)  //温度
+  {
+    //    Serial.println("644");
+    MotorCoolentTemp[0] = inMessage.data[0];
+    MotorCoolentTemp[1] = inMessage.data[1];
+    BatCoolentTemp[0] = inMessage.data[4];
+    BatCoolentTemp[1] = inMessage.data[5];
+  }
+  if (inMessage.id >= 0x6D0 && inMessage.id <= 0x6D7) { //
+    byte i, id;
+    id = inMessage.id - 0x6D0;
     for (i = 0; i <= 7; i++) {
-      msg1B0[i] = inMessage.data[i];
+      bat_probe_temp[id * 8 + i] = inMessage.data[i] - 50;
     }
   }
+  if (inMessage.id >= 0x6B0 && inMessage.id <= 0x6C7) { //
+    byte i, id;
+    id = inMessage.id - 0x6B0;
+    for (i = 0; i <= 7; i += 2) {
+      bat_cell_volt[id * 4 + i / 2] = (inMessage.data[i] << 8) + inMessage.data[i + 1];
+    }
+  }
+
 }
 //----------------------------------------------------------------------------------------//
 //                                    ↑CAN报文处理子程序↑                                  //
@@ -454,12 +409,8 @@ byte brightFilter()
 //--------------------------取出CAN数据
 void dispatch()
 {
-  //  if (Vehicle.receiveBufferCount() > CANbufferCount[0])
-  //    CANbufferCount[0] = Vehicle.receiveBufferCount();
-  //  if (BMS.receiveBufferCount() > CANbufferCount[1])
-  //    CANbufferCount[1] = BMS.receiveBufferCount();
-  while (BMS.dispatchReceivedMessage());
-  while (Vehicle.dispatchReceivedMessage());
+  while (IBUS1.dispatchReceivedMessage());
+  while (EVBUS.dispatchReceivedMessage());
   while (FC.dispatchReceivedMessage());
 }
 
