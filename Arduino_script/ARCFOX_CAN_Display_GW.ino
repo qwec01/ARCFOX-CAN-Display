@@ -50,21 +50,21 @@ static const uint16_t RatedVoltage = 3398;  //电池额定电压339.8V
 static const uint16_t RatedAh = 2756;       //电池额定容量275.6Ah
 static const uint16_t Mass = 2125;          //整备质量kg
 //CAN报文计算用变量
-uint16_t current = 25000, voltage, torque=32768, MotorRPM = 32768, odo[5], current12V, voltage12V, compressor_current, PTC_current, bat_cell_volt[96];
-uint8_t fanRPM, grillOpen,interior_temp;
+uint16_t current = 25000, voltage, torque = 32768, MotorRPM = 32768, odo[5], current12V, voltage12V, compressor_current, PTC_current, bat_cell_volt[96];
+uint8_t fanRPM, grillOpen, interior_temp, BatPumpOn, AC_wind;
 int8_t bat_probe_temp[64];
-uint16_t cylinder_pressure;
+uint16_t cylinder_pressure, bat_heater_current;
 //屏显示用变量
-uint16_t Current12V, Voltage12V, CompressorPower, PTCPower;
+uint16_t Current12V, Voltage12V, CompressorPower, PTCPower, BatHeaterPower;
 uint16_t x1 = 0, AhBurnt, AhRegen, Range, MaxVolt, MinVolt, spd, spd_prev;
 uint16_t BrightFilterBuf[16] = { 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024 }, brightorg;
 uint16_t Voltage, Voltagei, Ri, start_SOC, SOC, SOCt, trip_SOC, used_SOC, /*used_SOC_at_start,*/ last_stop_SOC, meter_per_SOC, MaxRange, RangeRemaining;
 uint16_t Voltagebox, powerbox;
-int16_t power, accel, consumeRate,Torque;
-int8_t PowerPercent,  MaxBatProbTemp, MinBatProbTemp, Temp[8],MotorCoolentTemp[2],BatCoolentTemp[2],HeatCoreTemp[2];
-uint8_t dot = 2, SlowRefresh, bright, CANbufferCount[2] = { 0, 0 };
+int16_t power, accel, consumeRate, Torque;
+int8_t PowerPercent,  MaxBatProbTemp, MinBatProbTemp, Temp[8], MotorCoolentTemp[2], BatCoolentTemp[2], HeatCoreTemp[2];
+uint8_t dot = 2, SlowRefresh, bright, CANbufferCount[2] = { 0, 0 }, ChargeGun, SlowCharge;
 
-uint8_t NonTractionPowerCount, flag,TorquePercent,BrakePercent;
+uint8_t NonTractionPowerCount, flag, TorquePercent, BrakePercent;
 uint8_t i, CheckInterval;
 uint32_t runtime, ODO, brightruntime, ODObeginForMaxRangeCalc;
 int32_t NonTractionPower;
@@ -75,8 +75,8 @@ uint8_t FastCharge, CurPage, ChargerReady, BMSReady, ChargerHandShake = 0, BMSHa
 uint8_t TotalPacketNum, PacketNum, MessageData[64], MultiPacketReady, BMSMaxTemp, CCCV = 0;
 uint16_t MessageBytes, ChargerVoltage, ChargerCurrent, ChargerMaxVoltage, ChargerMaxCurrent;
 uint16_t BMSVoltage, BMSCurrent, BMSMaxVoltage, BMSMaxCurrent, RequireVoltage, RequireCurrent;
-uint32_t FastChargeTimer = 0;
-static const uint32_t FastChargeTimeout = 10000;  //ms
+//uint32_t FastChargeTimer = 0;
+//static const uint32_t FastChargeTimeout = 10000;  //ms
 uint8_t msg511[4], msg511_2[8], msg507[8], msg505[8], msg1B0[8], msg29A[8], msg321[8], msg32C[8];
 
 
@@ -122,7 +122,7 @@ void setup() {
   SPI.setRX(MCP2515_MISO);
   SPI.begin();
 
-  Serial1.print("xstr 0,200,200,16,9,WHITE,BLACK,0,1,1,\"Starting MCP22515.\"");
+  Serial1.print("xstr 0,200,300,16,9,WHITE,BLACK,0,1,1,\"Starting MCP22515. Version 23.04.13\"");
   End();
 
   //  while(1);
@@ -145,10 +145,10 @@ void setup() {
     };
 
     uint16_t errorCode = FC.begin(
-      settings, [] {
-        FC.isr();
-      },
-      rxm0, rxm1, filters, 6);
+    settings, [] {
+      FC.isr();
+    },
+    rxm0, rxm1, filters, 6);
     if (errorCode == 0) {
       Serial1.print("xstr 0,0,200,16,9,WHITE,BLACK,0,1,1,\"FC CAN Succ\"");
       End();
@@ -183,10 +183,10 @@ void setup() {
     i = 1;
     while (errorCode != 0) {
       errorCode = EVBUS.begin(
-        settings, [] {
-          EVBUS.isr();
-        },
-        rxm0, rxm1, filters, 6);
+      settings, [] {
+        EVBUS.isr();
+      },
+      rxm0, rxm1, filters, 6);
       //      errorCode = Vehicle.begin (settings, [] { Vehicle.isr (); });
       if (errorCode == 0) {
         Serial1.print("xstr 0,32,300,16,9,WHITE,BLACK,0,1,1,\"EVBUS CAN Succ\"");
@@ -233,10 +233,10 @@ void setup() {
 
     while (errorCode != 0) {
       errorCode = IBUS1.begin(
-        settings, [] {
-          IBUS1.isr();
-        },
-        rxm0, rxm1, filters, 6);
+      settings, [] {
+        IBUS1.isr();
+      },
+      rxm0, rxm1, filters, 6);
       if (errorCode == 0) {
 
         Serial1.print("xstr 0,16,300,16,9,WHITE,BLACK,0,1,1,\"IBUS1 CAN Succ\"");
@@ -263,7 +263,7 @@ void setup() {
 
 
   //--set filters--------------------------------------------
-  {//-----------------------------------------------IBUS1---------------------------------
+  { //-----------------------------------------------IBUS1---------------------------------
     ACAN2515Mask rxm0 = standard2515Mask(0x7FF, 0, 0x04);  //前2 只管第2字节低3位的生命信号是x4或xC时通过filter
     ACAN2515Mask rxm1 = standard2515Mask(0x7FF, 0, 0);  //后4
     const ACAN2515AcceptanceFilter filters[] = {
@@ -286,7 +286,7 @@ void setup() {
     }
   }  //----------------------------------------------------------------------------------
 
-  {//---------------------------------------------EVBUS--------------------------------
+  { //---------------------------------------------EVBUS--------------------------------
     ACAN2515Mask rxm0 = standard2515Mask(0x792, 0, 0x04);  //前2 只管第2字节低3位的生命信号是x4或xC时通过filter，
     ACAN2515Mask rxm1 = standard2515Mask(0x700, 0, 0);     //后4
     const ACAN2515AcceptanceFilter filters[] = {
@@ -388,7 +388,7 @@ void setup() {
   }
   if (SOC > 0) {
     Serial1.print("xstr 0,96,200,16,9,WHITE,BLACK,0,1,1,\"Lost SOC when stop: ");
-    if(used_SOC<0)
+    if (used_SOC < 0)
       Serial1.print("0.00");
     else
       Serial1.print((last_stop_SOC - start_SOC) / 10.0);
@@ -413,11 +413,17 @@ void setup() {
 
 void loop() {
   dispatch();
-  if (millis() - FastChargeTimer > FastChargeTimeout || millis() < FastChargeTimeout) {
+  if (ChargeGun == 0x20) {
+    FastCharge = 1;  //快充中
+    SlowCharge = 0;
+  } else if (ChargeGun == 0x02) {
     FastCharge = 0;  //非快充中
+    SlowCharge = 1; //慢充中
     FastChargeReset();
   } else {
-    FastCharge = 1;  //快充中
+    FastCharge = 0;
+    SlowCharge = 0;
+    FastChargeReset();
   }
   if (millis() > runtime + 200) {
 

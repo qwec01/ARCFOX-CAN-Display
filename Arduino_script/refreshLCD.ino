@@ -71,9 +71,10 @@ void refreshLCD() {
       flag -= 0x08;
     }
     UpdateFloat(6, consumeRate);
-    //------------------------------制热功率
+    //------------------------------制热\电池加热功率
     UpdateFloat(2, CompressorPower / 100);
     UpdateFloat(10, PTCPower / 100);
+    UpdateFloat(9, BatHeaterPower / 100);
     //-------------------------------加速度/坡度
     //    if (spd == 0 || (abs(spd - spd_prev) < 2)) //显示坡度
     //    {
@@ -120,7 +121,7 @@ void refreshLCD() {
       UpdateInt(17, BatCoolentTemp[1] - 50);    //电池水温
       UpdateInt(12, HeatCoreTemp[0] - 50);      //暖水箱出口温度
       UpdateInt(11, HeatCoreTemp[1] - 50);      //暖水箱进口温度
-                                                //-----------------------------------------------------------主动格栅开度
+//-----------------------------------------------------------主动格栅开度
       if (grillOpen >= 100) {
         Serial1.print("p0.pic=5");
         End();
@@ -137,9 +138,15 @@ void refreshLCD() {
         Serial1.print("p0.pic=1");
         End();
       }
-      //-------------------------------------冷却风扇转速
+      //-------------------------------------冷却风扇转速、空调风速
       UpdateInt(13, fanRPM * 10);
-
+      UpdateInt(18, AC_wind / 2);
+      //-------------------------------------电池水泵
+      if (BatPumpOn >= 1){
+        Serial1.print("p2.aph=127");End();
+      }else{
+        Serial1.print("p2.aph=0");End();
+      }
       //      Serial.print(msg644[0]);
 
       //    Serial.print(NonTractionPower / 5);

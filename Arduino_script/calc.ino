@@ -10,6 +10,7 @@ void calc() {
   spd = abs((MotorRPM - 32768)) / 6.793;
   CompressorPower = compressor_current / 4000.0 * Voltage / 10.0;  //单位W
   PTCPower = PTC_current / 1000.0 * Voltage / 10.0;                //单位W
+  BatHeaterPower=bat_heater_current/1000.0*Voltage/10.0;          //单位W
   if (NonTractionPowerCount == 5) {
     NonTractionPower = 0;
     NonTractionPowerCount = 0;

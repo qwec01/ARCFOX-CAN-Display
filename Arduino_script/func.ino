@@ -205,7 +205,7 @@ static void RCV0 (const CANMessage & inMessage) {   //ID=150 电机
     //TractionAllowed
   }
   if (inMessage.id == 0x120) { //制动系统数据 IBUS1
-    cylinder_pressure = ((inMessage.data[2] << 2)+((inMessage.data[3] & 0b11000000)>>6))-73; //闸缸压力
+    cylinder_pressure = ((inMessage.data[2] << 2) + ((inMessage.data[3] & 0b11000000) >> 6)) - 73; //闸缸压力
   }
 }
 
@@ -223,12 +223,12 @@ static void RCV1 (const CANMessage & inMessage)   //ID=215 电压
 
   if (inMessage.id == 0x1826F456) //充电机握手
   {
-    FastChargeTimer = millis();
+//    FastChargeTimer = millis();
     ChargerHandShake = 1;
   }
   if (inMessage.id == 0x182756F4) //BMS握手
   {
-    FastChargeTimer = millis();
+//    FastChargeTimer = millis();
     BMSHandShake = 1;
   }
 
@@ -237,7 +237,12 @@ static void RCV1 (const CANMessage & inMessage)   //ID=215 电压
 static void RCV2 (const CANMessage & inMessage)   //ID=504 剩余续航
 {
   //  Serial.print(inMessage.id,HEX);
-
+  if (inMessage.id == 0x371) { //电池加热
+    bat_heater_current = (inMessage.data[3] << 8) + inMessage.data[4];
+  }
+  if (inMessage.id == 0x373) { //空调风速
+    AC_wind = (inMessage.data[1] & 0x0F);
+  }
   if (inMessage.id == 0x374) { //电加热
     PTC_current = (inMessage.data[3] << 8) + inMessage.data[4];
   }
@@ -253,7 +258,7 @@ static void RCV2 (const CANMessage & inMessage)   //ID=504 剩余续航
   }
   if (inMessage.id == 0x1CEC56F4 || inMessage.id == 0x1CECF456)
   {
-    FastChargeTimer = millis();
+//    FastChargeTimer = millis();
     if (inMessage.data[0] == 0x10) { //请求多包传送
       MessageBytes = (inMessage.data[2] << 8) + inMessage.data[1];
       TotalPacketNum = inMessage.data[3];
@@ -273,7 +278,7 @@ static void RCV2 (const CANMessage & inMessage)   //ID=504 剩余续航
   }
   if (inMessage.id == 0x1CEB56F4 || inMessage.id == 0x1CEBF456)
   {
-    FastChargeTimer = millis();
+//    FastChargeTimer = millis();
     PacketNum = inMessage.data[0];
     uint8_t i;
     for (i = 0; i <= 6; i++) {
@@ -294,11 +299,14 @@ static void RCV2 (const CANMessage & inMessage)   //ID=504 剩余续航
 static void RCV3 (const CANMessage & inMessage)   //ID=318 速度 小计里程
 {
   //  Serial.print(inMessage.id,HEX);
+  if (inMessage.id == 0x43A) {  //充电枪检测
+    ChargeGun = (inMessage.data[3] & 0x22);
+  }
   if (inMessage.id == 0x491) {  //压缩机
     compressor_current = ((inMessage.data[6] << 8) + inMessage.data[7]);
   }
   if (inMessage.id == 0x1808F456) {
-    FastChargeTimer = millis();
+//    FastChargeTimer = millis();
     ChargerMaxVoltage = (inMessage.data[1] << 8) + inMessage.data[0];
     ChargerMaxCurrent = abs((inMessage.data[5] << 8) + inMessage.data[4] - 4000); //10倍
   }
@@ -330,9 +338,10 @@ static void RCV4 (const CANMessage & inMessage)   //ID=345 375
     for (i = 0; i <= 4; i++)
       odo[i] = inMessage.data[i];
   }
-  if (inMessage.id == 0x581) { //风扇、主动格栅
+  if (inMessage.id == 0x581) { //风扇、主动格栅、电池水泵
     fanRPM = inMessage.data[2];
     grillOpen = inMessage.data[5];
+    BatPumpOn = (inMessage.data[0] & 0b00000100) >> 2;
   }
   if (inMessage.id == 0x582) { //车内温、PM2.5
     interior_temp = inMessage.data[0];
@@ -345,12 +354,12 @@ static void RCV4 (const CANMessage & inMessage)   //ID=345 375
 
 
   if (inMessage.id == 0x1812F456) { //桩输出
-    FastChargeTimer = millis();
+//    FastChargeTimer = millis();
     ChargerVoltage = (inMessage.data[1] << 8) + inMessage.data[0];
     ChargerCurrent = abs((inMessage.data[3] << 8) + inMessage.data[2] - 4000); //10倍
   }
   if (inMessage.id == 0x181056F4) { //车辆需求
-    FastChargeTimer = millis();
+//    FastChargeTimer = millis();
     RequireVoltage = (inMessage.data[1] << 8) + inMessage.data[0];
     RequireCurrent = abs((inMessage.data[3] << 8) + inMessage.data[2] - 4000); //10倍
     CCCV = inMessage.data[4];
