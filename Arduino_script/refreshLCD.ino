@@ -1,6 +1,6 @@
 void refreshLCD() {
   //---------------------------------------------------被动解析模式
-  StopRefresh();
+  //StopRefresh();
   if (CurPage == 1) {
     uint16_t color;
     //-------------------------------功率%
@@ -112,7 +112,8 @@ void refreshLCD() {
       //-----------------------------------其它温度
       UpdateInt(8, interior_temp / 2 - 49);
       UpdateInt(10, Temp[3]);                   //IGBT
-      UpdateInt(9, Temp[4]);                    //变流器冷却液
+      //UpdateInt(9, Temp[4]);                    //变流器冷却液
+      UpdateInt(9, VaporatorTemp);
                                                 //      UpdateInt(12, uint16_t(Temp[0])); //AC进风口
                                                 //      UpdateInt(10, uint16_t(Temp[1]) / 2 - 50); //？冷却液
       UpdateInt(14, MotorCoolentTemp[0] - 50);  //PDU、MCU、电机水温
@@ -231,9 +232,9 @@ void refreshLCD() {
     UpdateFloat(2, RequireVoltage);
     UpdateFloat(1, RequireCurrent);
     UpdateFloat(4, RequireVoltage * RequireCurrent / 10000);
-    UpdateFloat(6, Voltage);
-    UpdateFloat(7, abs(Current_mA) / 100);
-    UpdateFloat(8, Voltage * abs(Current_mA) / 1000000);
+//    UpdateFloat(6, Voltage);
+//    UpdateFloat(7, abs(Current_mA) / 100);
+//    UpdateFloat(8, Voltage * abs(Current_mA) / 1000000);
     UpdateFloat(9, BMSVoltage);
     UpdateFloat(10, BMSCurrent);
     UpdateFloat(11, BMSVoltage * BMSCurrent / 10000);
@@ -251,38 +252,36 @@ void refreshLCD() {
       Serial1.print("t22.txt=\"充电模式\"");
       End();
     }
-    //-----------------------------------更新0x511
-    String str = "t34.txt=\"", str1[4];
-    for (i = 0; i <= 3; i++) {
-      if (msg511[i] <= 15) {
-        str.concat("0");
+    if (SOC < 150)
+        UpdateFloat(7, SOC, 1, RED);
+      else if (SOC < 250)
+        UpdateFloat(7, SOC, 1, YELLOW);
+      else
+        UpdateFloat(7, SOC, 1, GREEN);
+    //------------------------------制热\电池加热功率
+    UpdateFloat(6, CompressorPower / 100);
+    UpdateFloat(12, PTCPower / 100);
+    UpdateFloat(8, BatHeaterPower / 100);
+    UpdateInt(7, MotorCoolentTemp[0] - 50);  //PDU、MCU、电机水温in
+    UpdateInt(11, MotorCoolentTemp[1] - 50);  //PDU、MCU、电机水温out
+    UpdateInt(12, BatCoolentTemp[0] - 50);    //电池水温
+    UpdateInt(13, BatCoolentTemp[1] - 50);    //电池水温
+    UpdateInt(18, HeatCoreTemp[0] - 50);      //暖水箱出口温度
+    UpdateInt(19, HeatCoreTemp[1] - 50);      //暖水箱进口温度
+    UpdateInt(8, interior_temp / 2 - 49);
+    UpdateInt(10, Temp[3]);                   //IGBT
+    UpdateInt(9, VaporatorTemp);
+    UpdateInt(14,FastChargeSocketTemp[0] - 50);  //快充口温度
+    UpdateInt(15,FastChargeSocketTemp[1] - 50);
+    if (BatPumpOn >= 1){  //电池水泵
+        Serial1.print("p2.aph=127");End();
+      }else{
+        Serial1.print("p2.aph=0");End();
       }
-      str1[i] = String(msg511[i], HEX);
-      str.concat(str1[i]);
-      str.concat(" ");
-    }
-    str.concat("\"");
-    Serial1.print(str);
-    End();
-    //      Serial.print("String511=");
-    //      Serial.println(str);
-    //-----------------------------------更新0x511
-    str = "t37.txt=\"";
-    if (msg507[1] <= 15) {
-      str.concat("0");
-    }
-    str.concat(String(msg507, HEX));
-    str.concat("\"");
-    //      Serial.print("String507=");
-    //      Serial.println(str);
-    Serial1.print(str);
-    End();                                    //更新0x507
-                                              //      Serial1.print(String(msg507, HEX)); End();
-    UpdateInt(14, MotorCoolentTemp[0] - 50);  //PDU、MCU、电机水温
-    UpdateInt(15, MotorCoolentTemp[1] - 50);  //PDU、MCU、电机水温
-    UpdateInt(16, BatCoolentTemp[0] - 50);    //电池水温
-    UpdateInt(17, BatCoolentTemp[1] - 50);    //电池水温
     SlowRefresh = 0;
+    Serial1.print("dim=");
+    Serial1.print(bright);
+    End();
   } else if (CurPage == 3 and SlowRefresh == 2) {
     String str;
     UpdateTxt(27, "1B0");
@@ -347,5 +346,5 @@ void refreshLCD() {
     }
     SlowRefresh = 0;
   }
-  StartRefresh();
+  //StartRefresh();
 }

@@ -61,7 +61,7 @@ uint16_t BrightFilterBuf[16] = { 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
 uint16_t Voltage, Voltagei, Ri, start_SOC, SOC, SOCt, trip_SOC, used_SOC, /*used_SOC_at_start,*/ last_stop_SOC, meter_per_SOC, MaxRange, RangeRemaining;
 uint16_t Voltagebox, powerbox;
 int16_t power, accel, consumeRate, Torque;
-int8_t PowerPercent,  MaxBatProbTemp, MinBatProbTemp, Temp[8], MotorCoolentTemp[2], BatCoolentTemp[2], HeatCoreTemp[2];
+int8_t PowerPercent,  MaxBatProbTemp, MinBatProbTemp, Temp[8], VaporatorTemp, MotorCoolentTemp[2], BatCoolentTemp[2], HeatCoreTemp[2], FastChargeSocketTemp[2];
 uint8_t dot = 2, SlowRefresh, bright, CANbufferCount[2] = { 0, 0 }, ChargeGun, SlowCharge;
 
 uint8_t NonTractionPowerCount, flag, TorquePercent, BrakePercent;
@@ -122,7 +122,7 @@ void setup() {
   SPI.setRX(MCP2515_MISO);
   SPI.begin();
 
-  Serial1.print("xstr 0,200,300,16,9,WHITE,BLACK,0,1,1,\"Starting MCP22515. Version 23.04.13\"");
+  Serial1.print("xstr 0,200,300,16,9,WHITE,BLACK,0,1,1,\"Starting MCP22515. Version 23.07.25\"");
   End();
 
   //  while(1);

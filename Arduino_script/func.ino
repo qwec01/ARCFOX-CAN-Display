@@ -322,6 +322,9 @@ static void RCV4 (const CANMessage & inMessage)   //ID=345 375
 {
   //  Serial.print(inMessage.id,HEX);
 
+  if (inMessage.id == 0x502) { //好多温度
+    VaporatorTemp = inMessage.data[0] - 50; 
+  }
   if (inMessage.id == 0x504) { //剩余续航
     Range = (inMessage.data[3] << 8) + inMessage.data[4]; //10倍
   }
@@ -391,6 +394,11 @@ static void RCV5 (const CANMessage & inMessage)   //
     for (i = 0; i <= 7; i += 2) {
       bat_cell_volt[id * 4 + i / 2] = (inMessage.data[i] << 8) + inMessage.data[i + 1];
     }
+  }
+  if (inMessage.id == 0x6DA) //充电口温度
+  {
+    FastChargeSocketTemp[0]=inMessage.data[4];
+    FastChargeSocketTemp[1]=inMessage.data[5];
   }
 
 }
